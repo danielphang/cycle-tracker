@@ -208,18 +208,20 @@ function parseInput(raw) {
 
 /* ── Chart Data ─────────────────────────────────────────────────── */
 
-function generateChart(state) {
+function generateChart(state, lookback, totalDays) {
   var cLen = state.cycleLength || 27;
   var pLen = state.periodLength || 5;
   var lpd = new Date(state.lastPeriodStart); lpd.setHours(0,0,0,0);
   var today = new Date(); today.setHours(0,0,0,0);
-  var base = new Date(today); base.setDate(base.getDate() - 45);
+  var lb = lookback || 45;
+  var td = totalDays || 90;
+  var base = new Date(today); base.setDate(base.getDate() - lb);
   var entryMap = {};
   if (state.moodEntries) {
     for (var e=0; e<state.moodEntries.length; e++) entryMap[state.moodEntries[e].date] = state.moodEntries[e];
   }
   var pts = [];
-  for (var i=0; i<90; i++) {
+  for (var i=0; i<td; i++) {
     var dd = new Date(base); dd.setDate(base.getDate() + i);
     var daysSince = Math.floor((dd.getTime() - lpd.getTime()) / 86400000);
     var dic = ((daysSince % cLen) + cLen) % cLen;
@@ -333,10 +335,11 @@ function HormoneChart(props) {
   var gIdE = props.gIdE || "eG";
   var gIdP = props.gIdP || "pG";
   var showLabel = props.showTodayLabel;
+  var mob = props.mobile;
 
   return h("div", {style:{width:"100%",height:chartH}},
     h(ResponsiveContainer, {width:"100%",height:"100%"},
-      h(ComposedChart, {data:chart, margin:{top:10,right:30,bottom:20,left:10}},
+      h(ComposedChart, {data:chart, margin:mob?{top:6,right:10,bottom:16,left:0}:{top:10,right:30,bottom:20,left:10}},
         h("defs", null,
           h("linearGradient",{id:gIdE,x1:0,y1:0,x2:0,y2:1},
             h("stop",{offset:"0%",stopColor:"#f06292",stopOpacity:0.25}),
@@ -365,7 +368,7 @@ function HormoneChart(props) {
 }
 
 function HormoneLegend() {
-  return h("div", {style:{display:"flex",gap:16,justifyContent:"center",fontSize:12,paddingBottom:6}},
+  return h("div", {style:{display:"flex",gap:"6px 16px",justifyContent:"center",flexWrap:"wrap",fontSize:12,paddingBottom:6}},
     h("span",{style:{color:"#f06292",fontWeight:700}},"\u2014 Estrogen"),
     h("span",{style:{color:"#ce93d8",fontWeight:700}},"\u2014 Progesterone"),
     h("span",{style:{color:"#ffb74d",fontWeight:700}},"- - LH"),
@@ -383,6 +386,7 @@ function App() {
   var _i  = useState("");          var inp     = _i[0]; var setInp     = _i[1];
   var _ts = useState([]);          var toasts  = _ts[0]; var setToasts = _ts[1];
   var idRef = useRef(0);
+  var mobile = useIsMobile();
 
   function toast(type, msg) {
     var id = ++idRef.current;
@@ -403,13 +407,14 @@ function App() {
 
   var chart = useMemo(function(){
     if (!data) return [];
-    return generateChart(data);
-  }, [data]);
+    return mobile ? generateChart(data, 30, 60) : generateChart(data);
+  }, [data, mobile]);
 
   var todayPt = useMemo(function(){
     for (var i=0; i<chart.length; i++) { if (chart[i].isToday) return chart[i]; }
-    return chart[45] || null;
-  }, [chart]);
+    var fallback = mobile ? 30 : 45;
+    return chart[fallback] || null;
+  }, [chart, mobile]);
 
   var windows = useMemo(function(){ return upcomingWindows(chart); }, [chart]);
 
@@ -467,7 +472,7 @@ function App() {
   var todayProf = phaseProfile(todayPt.phase);
 
   /* ── Build UI ─────────────────────────────────────────────── */
-  return h("div", {style:{padding:"20px 20px 60px",maxWidth:920,margin:"0 auto"}},
+  return h("div", {style:{padding:mobile?"12px 10px 40px":"20px 20px 60px",maxWidth:920,margin:"0 auto"}},
 
     // Toasts
     h("div",{className:"toast-wrap"},
@@ -478,11 +483,11 @@ function App() {
     ),
 
     // Header
-    h("h1",{className:"serif",style:{textAlign:"center",fontSize:38,marginBottom:4,letterSpacing:0.5}},"Cycle Intelligence"),
-    h("p",{style:{textAlign:"center",color:"#888",marginBottom:28,fontSize:14}},"Hormonal pattern analysis for relationship well-being"),
+    h("h1",{className:"serif",style:{textAlign:"center",fontSize:mobile?26:38,marginBottom:4,letterSpacing:0.5}},"Cycle Intelligence"),
+    h("p",{style:{textAlign:"center",color:"#888",marginBottom:mobile?16:28,fontSize:mobile?13:14}},"Hormonal pattern analysis for relationship well-being"),
 
     // Tabs
-    h("div",{style:{display:"flex",gap:10,justifyContent:"center",marginBottom:24}},
+    h("div",{style:{display:"flex",gap:mobile?6:10,justifyContent:"center",marginBottom:mobile?16:24}},
       ["Dashboard","Hormones","History"].map(function(t){
         return h("button",{key:t,className:"tab-btn"+(tab===t?" active":""),onClick:function(){setTab(t);}},t);
       })
@@ -495,7 +500,7 @@ function App() {
         h("span",{style:{padding:"5px 14px",background:todayPt.phaseColor,borderRadius:16,fontSize:13,fontWeight:700}}, todayPt.phase+" Phase")
       ),
       h("p",{style:{fontStyle:"italic",color:"#bbb",marginBottom:12,fontSize:15}}, "\u201C"+todayProf.tip+"\u201D"),
-      h("div",{style:{display:"flex",gap:24,flexWrap:"wrap"}},
+      h("div",{style:{display:mobile?"grid":"flex",gridTemplateColumns:mobile?"1fr 1fr":undefined,gap:mobile?"8px 12px":24,flexWrap:"wrap"}},
         h("span",{className:"stat"},"Patience: ",h("strong",null,todayProf.patience+"%")),
         h("span",{className:"stat"},"Energy: ",h("strong",null,todayProf.energy+"%")),
         h("span",{className:"stat"},"Estrogen: ",h("strong",null,Math.round(todayPt.estrogen)+"%")),
@@ -506,9 +511,9 @@ function App() {
     // ─── Upcoming Windows ───────────────────────────────────
     windows.length > 0 && h("div",{style:{marginBottom:20}},
       h("h3",{className:"serif",style:{marginBottom:10}},"Upcoming Conversation Windows"),
-      h("div",{style:{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}},
+      h("div",{style:{display:"flex",flexDirection:mobile?"column":"row",gap:12,overflowX:mobile?"visible":"auto",paddingBottom:8}},
         windows.map(function(w,i){
-          return h("div",{key:i,style:{background:"rgba(255,255,255,0.04)",minWidth:190,borderRadius:12,padding:14,borderLeft:"4px solid "+w.color,flexShrink:0}},
+          return h("div",{key:i,style:{background:"rgba(255,255,255,0.04)",minWidth:mobile?0:190,borderRadius:12,padding:mobile?12:14,borderLeft:"4px solid "+w.color,flexShrink:0}},
             h("div",{style:{color:w.color,fontWeight:700,marginBottom:4,fontSize:14}},w.type),
             h("div",{style:{fontSize:13}}, fmtDate(w.start)+" \u2013 "+fmtDate(w.end)),
             h("div",{style:{fontSize:11,color:"#888",marginTop:4}},w.phase)
@@ -520,13 +525,13 @@ function App() {
     // ─── Model Confidence ───────────────────────────────────
     h("div",{className:"card"},
       h("h3",{className:"serif",style:{marginBottom:10}},"Model Confidence"),
-      h("div",{style:{display:"flex",alignItems:"center",gap:20}},
-        h("div",{style:{fontSize:44,fontWeight:700,color:fitTier(confidence.avg).color}},
+      h("div",{style:{display:"flex",flexDirection:mobile?"column":"row",alignItems:mobile?"flex-start":"center",gap:mobile?10:20}},
+        h("div",{style:{fontSize:mobile?36:44,fontWeight:700,color:fitTier(confidence.avg).color}},
           confidence.n>0 ? Math.round(confidence.avg*100)+"%" : "N/A"
         ),
         h("div",null,
-          h("div",{style:{fontWeight:700,fontSize:16,marginBottom:4}}, fitTier(confidence.avg).label),
-          h("div",{style:{fontSize:13,color:"#aaa"}}, confidence.hormonal+" Hormonal \u00B7 "+confidence.partial+" Partial \u00B7 "+confidence.situational+" Situational")
+          h("div",{style:{fontWeight:700,fontSize:mobile?14:16,marginBottom:4}}, fitTier(confidence.avg).label),
+          h("div",{style:{fontSize:mobile?12:13,color:"#aaa"}}, confidence.hormonal+" Hormonal \u00B7 "+confidence.partial+" Partial \u00B7 "+confidence.situational+" Situational")
         )
       ),
       confidence.outliers.length>0 && h("div",{style:{marginTop:14,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.08)"}},
@@ -545,17 +550,17 @@ function App() {
     // ─── Input Area ─────────────────────────────────────────
     h("div",{className:"card"},
       h("h3",{className:"serif",style:{marginBottom:10}},"Log Observation"),
-      h("div",{style:{display:"flex",gap:10}},
+      h("div",{style:{display:"flex",flexDirection:mobile?"column":"row",gap:10}},
         h("input",{
           type:"text",value:inp,
           onChange:function(e){setInp(e.target.value);},
           onKeyDown:function(e){if(e.key==="Enter"&&preview.valid)handleLog();},
-          placeholder:"e.g. \"yesterday she was really irritable\" or \"got my period today\"",
-          style:{flex:1,padding:"12px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(0,0,0,0.25)",color:"#fff",fontSize:15}
+          placeholder:mobile?"e.g. \"she was irritable\" or \"period today\"":"e.g. \"yesterday she was really irritable\" or \"got my period today\"",
+          style:{flex:1,padding:mobile?"10px 12px":"12px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(0,0,0,0.25)",color:"#fff",fontSize:mobile?14:15}
         }),
         h("button",{
           disabled:!preview.valid, onClick:handleLog,
-          style:{padding:"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:preview.valid?1:0.4,cursor:preview.valid?"pointer":"not-allowed",transition:"opacity .2s"}
+          style:{padding:mobile?"10px 0":"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:preview.valid?1:0.4,cursor:preview.valid?"pointer":"not-allowed",transition:"opacity .2s",width:mobile?"100%":undefined}
         },"Log")
       ),
       inp && h("div",{style:{marginTop:10,fontSize:13,display:"flex",alignItems:"center",gap:8,color:preview.valid?"#4caf50":"#ef5350"}},
@@ -572,9 +577,9 @@ function App() {
     tab==="Dashboard" && h("div",null,
       h("div",{className:"card",style:{paddingRight:0}},
         h("h3",{className:"serif",style:{marginBottom:10,paddingRight:20}},"Mood Trajectory"),
-        h("div",{style:{width:"100%",height:340}},
+        h("div",{style:{width:"100%",height:mobile?260:340}},
           h(ResponsiveContainer,{width:"100%",height:"100%"},
-            h(ComposedChart,{data:chart,margin:{top:20,right:30,bottom:20,left:10}},
+            h(ComposedChart,{data:chart,margin:mobile?{top:10,right:10,bottom:16,left:0}:{top:20,right:30,bottom:20,left:10}},
               h("defs",null,
                 h("linearGradient",{id:"moodG",x1:0,y1:0,x2:0,y2:1},
                   h("stop",{offset:"0%",stopColor:"#4caf50",stopOpacity:0.35}),
@@ -596,7 +601,7 @@ function App() {
       ),
       h("div",{className:"card",style:{paddingRight:0}},
         h("h3",{className:"serif",style:{marginBottom:10,paddingRight:20}},"Hormonal Indicators"),
-        h(HormoneChart,{data:chart,todayDisp:todayPt.disp,height:240,gIdE:"eG1",gIdP:"pG1"}),
+        h(HormoneChart,{data:chart,todayDisp:todayPt.disp,height:mobile?200:240,gIdE:"eG1",gIdP:"pG1",mobile:mobile}),
         h(HormoneLegend)
       ),
       h(PhaseBar,{cycleLength:data.cycleLength,periodLength:data.periodLength,todayPhase:todayPt.phase})
@@ -608,7 +613,7 @@ function App() {
     tab==="Hormones" && h("div",null,
       h("div",{className:"card",style:{paddingRight:0}},
         h("h3",{className:"serif",style:{marginBottom:10,paddingRight:20}},"Hormonal Trajectories"),
-        h(HormoneChart,{data:chart,todayDisp:todayPt.disp,height:380,gIdE:"eG2",gIdP:"pG2",showTodayLabel:true}),
+        h(HormoneChart,{data:chart,todayDisp:todayPt.disp,height:mobile?280:380,gIdE:"eG2",gIdP:"pG2",showTodayLabel:true,mobile:mobile}),
         h(HormoneLegend)
       ),
       h("h3",{className:"serif",style:{marginBottom:10}},"Phase Guide"),
@@ -634,8 +639,8 @@ function App() {
     // ═══════════════════════════════════════════════════════════
     tab==="History" && h("div",null,
       h("div",{className:"card"},
-        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
-          h("h3",{className:"serif",style:{margin:0}},"Cycle Length: "+(data.cycleLength||27)+" days"),
+        h("div",{style:{display:"flex",flexDirection:mobile?"column":"row",justifyContent:"space-between",alignItems:mobile?"flex-start":"center",gap:mobile?4:0,marginBottom:12}},
+          h("h3",{className:"serif",style:{margin:0,fontSize:mobile?16:undefined}},"Cycle Length: "+(data.cycleLength||27)+" days"),
           h("span",{style:{fontSize:12,color:"#888"}},"computed from period history")
         ),
         h("h4",{style:{color:"#c2185b",margin:"0 0 10px"}},"Period Start Dates"),
@@ -652,8 +657,8 @@ function App() {
       (data.moodEntries||[]).slice().sort(function(a,b){return b.date<a.date?-1:1;}).map(function(e,i){
         var pt = chartMap[e.date];
         var ft2 = pt && pt.fitScore!==null ? fitTier(pt.fitScore) : null;
-        return h("div",{key:i,className:"card",style:{margin:"0 0 12px",display:"flex",gap:14,alignItems:"flex-start"}},
-          h("div",{style:{fontSize:28,background:"rgba(0,0,0,0.3)",width:48,height:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}, emoji(e.score)),
+        return h("div",{key:i,className:"card",style:{margin:"0 0 12px",display:"flex",gap:mobile?10:14,alignItems:"flex-start"}},
+          h("div",{style:{fontSize:mobile?22:28,background:"rgba(0,0,0,0.3)",width:mobile?38:48,height:mobile?38:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}, emoji(e.score)),
           h("div",{style:{flex:1,minWidth:0}},
             h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
               h("span",{style:{fontWeight:700}}, fmtDate(e.date)+" ",
