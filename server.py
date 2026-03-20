@@ -8,10 +8,23 @@ import socketserver
 import json
 import os
 import re
+import urllib.request
 from datetime import datetime, timedelta
 
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 BASE = os.path.dirname(os.path.abspath(__file__))
+
+def _load_api_key():
+    key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        return key.strip()
+    secrets_file = os.path.join(BASE, ".secrets", "gemini_apikey")
+    if os.path.exists(secrets_file):
+        with open(secrets_file, "r") as f:
+            return f.read().strip()
+    return None
+
+GEMINI_API_KEY = _load_api_key()
 MOOD_FILE = os.path.join(BASE, "data", "mood_log.md")
 PERIOD_FILE = os.path.join(BASE, "data", "period_log.md")
 
@@ -117,6 +130,80 @@ def build_state():
     }
 
 
+def call_gemini(text):
+    if not GEMINI_API_KEY:
+        return {"error": "GEMINI_API_KEY not configured"}, 500
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    system_prompt = f"""
+You are a mood/event parser for a menstrual cycle tracking app. 
+Extract structured data from the user's natural language input.
+
+Return ONLY valid JSON with this schema:
+{{
+  "entries": [{{
+    "date": "YYYY-MM-DD",
+    "type": "mood" | "period",
+    "score": -3 to +3 (integer, only for mood type),
+    "summary": "brief event description",
+    "original_text": "the part of input this was extracted from"
+  }}],
+  "understood": true/false,
+  "clarification": "optional message if input is ambiguous"
+}}
+
+Mood scoring guide:
+  -3: screaming, raging, explosive meltdown, terrible
+  -2: angry, fighting, irritable, overreacting, hostile, bad mood
+  -1: sensitive, emotional, withdrawn, tearful, quiet, off
+   0: neutral
+  +1: fine, okay, normal, stable, decent
+  +2: happy, cheerful, calm, patient, loving, good mood, sweet
+  +3: amazing, incredible, ecstatic, fantastic
+
+Date resolution rules:
+- Today's date is {today}
+- "today" = {today}
+- "yesterday" = {yesterday}
+- Relative days: "3 days ago", "last Tuesday", etc.
+- If no date mentioned, assume today.
+- Support backdating without friction.
+
+For period entries, detect phrases like "period started", "got her period", "day 1 of cycle".
+"""
+
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": f"{system_prompt}\n\nInput: {text}"
+            }]
+        }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json"
+        }
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            # Extract JSON from Gemini response format
+            text_response = res_data['candidates'][0]['content']['parts'][0]['text']
+            return json.loads(text_response), 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 # ── HTTP Handler ──────────────────────────────────────────────────
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -146,6 +233,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = self._read_body()
             delete_period(body["date"])
             self._json_response(200, build_state())
+
+        elif self.path == "/api/parse":
+            body = self._read_body()
+            text = body.get("text", "")
+            parsed, status = call_gemini(text)
+            self._json_response(status, {
+                "parsed": parsed,
+                "raw_text": text
+            })
 
         else:
             self._json_response(404, {"error": "not found"})

@@ -382,6 +382,8 @@ function App() {
   var _t  = useState("Dashboard"); var tab     = _t[0]; var setTab     = _t[1];
   var _i  = useState("");          var inp     = _i[0]; var setInp     = _i[1];
   var _ts = useState([]);          var toasts  = _ts[0]; var setToasts = _ts[1];
+  var _lp = useState(false);       var isParsing = _lp[0]; var setIsParsing = _lp[1];
+  var _lr = useState(null);        var llmResult = _lr[0]; var setLlmResult = _lr[1];
   var idRef = useRef(0);
 
   function toast(type, msg) {
@@ -399,7 +401,43 @@ function App() {
 
   useEffect(function(){ refresh(); }, []);
 
-  var preview = useMemo(function(){ return parseInput(inp); }, [inp]);
+  useEffect(function() {
+    if (!inp || inp.trim().length < 3) {
+      setLlmResult(null);
+      setIsParsing(false);
+      return;
+    }
+    var timer = setTimeout(function() {
+      setIsParsing(true);
+      fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: inp })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.parsed) setLlmResult(d.parsed);
+        setIsParsing(false);
+      })
+      .catch(function(err) {
+        console.error("parse err", err);
+        setIsParsing(false);
+      });
+    }, 500);
+    return function() { clearTimeout(timer); };
+  }, [inp]);
+
+  var localPreview = useMemo(function(){ return parseInput(inp); }, [inp]);
+  var preview = useMemo(function() {
+    if (llmResult && llmResult.understood && llmResult.entries && llmResult.entries.length > 0) {
+      if (llmResult.entries.length === 1) {
+        var e = llmResult.entries[0];
+        return { valid: true, type: e.type, date: e.date, score: e.score, word: e.summary, summary: e.summary, label: e.original_text || inp };
+      }
+      return { valid: true, type: "multiple", entries: llmResult.entries };
+    }
+    return localPreview;
+  }, [llmResult, localPreview, inp]);
 
   var chart = useMemo(function(){
     if (!data) return [];
@@ -439,17 +477,30 @@ function App() {
   /* ── Handlers ─────────────────────────────────────────────── */
   function handleLog() {
     if (!preview.valid) return;
-    if (preview.type === "period") {
-      fetch("/api/period", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:preview.date}) })
-        .then(function(r){return r.json();})
-        .then(function(d){setData(d); toast("success","Logged period start: "+fmtDate(preview.date));})
-        .catch(function(err){toast("error","Save failed");});
-    } else if (preview.type === "mood") {
-      fetch("/api/mood", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:preview.date,score:preview.score,label:preview.label}) })
-        .then(function(){refresh(); toast("success","Logged mood ("+(preview.score>0?"+":"")+preview.score+") for "+fmtDate(preview.date));})
-        .catch(function(err){toast("error","Save failed");});
+
+    var entries = [];
+    if (preview.type === "multiple") {
+      entries = preview.entries;
+    } else {
+      entries = [preview];
     }
+
+    entries.forEach(function(entry) {
+      if (entry.type === "period") {
+        fetch("/api/period", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:entry.date}) })
+          .then(function(r){return r.json();})
+          .then(function(d){setData(d); toast("success","Logged period start: "+fmtDate(entry.date));})
+          .catch(function(err){toast("error","Save failed");});
+      } else if (entry.type === "mood") {
+        var lbl = entry.label || entry.summary || inp.trim();
+        fetch("/api/mood", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:entry.date,score:entry.score,label:lbl}) })
+          .then(function(){refresh(); toast("success","Logged mood ("+(entry.score>0?"+":"")+entry.score+") for "+fmtDate(entry.date));})
+          .catch(function(err){toast("error","Save failed");});
+      }
+    });
+
     setInp("");
+    setLlmResult(null);
   }
 
   function handleDeletePeriod(dateStr) {
@@ -554,15 +605,17 @@ function App() {
           style:{flex:1,padding:"12px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(0,0,0,0.25)",color:"#fff",fontSize:15}
         }),
         h("button",{
-          disabled:!preview.valid, onClick:handleLog,
-          style:{padding:"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:preview.valid?1:0.4,cursor:preview.valid?"pointer":"not-allowed",transition:"opacity .2s"}
-        },"Log")
+          disabled:!preview.valid || isParsing, onClick:handleLog,
+          style:{padding:"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:(preview.valid && !isParsing)?1:0.4,cursor:(preview.valid && !isParsing)?"pointer":"not-allowed",transition:"opacity .2s"}
+        }, isParsing ? "..." : "Log")
       ),
       inp && h("div",{style:{marginTop:10,fontSize:13,display:"flex",alignItems:"center",gap:8,color:preview.valid?"#4caf50":"#ef5350"}},
-        h("span",null, preview.valid?"\u2705":"\u274C"),
-        preview.type==="period" && h("span",null,"Period start detected \u2192 "+fmtDate(preview.date)),
-        preview.type==="mood" && h("span",null, "Mood: \""+preview.word+"\" ("+(preview.score>0?"+":"")+preview.score+") \u2192 "+fmtDate(preview.date)),
-        preview.type==="unknown" && h("span",null,"Could not parse. Try a mood word or \"period started\".")
+        h("span",null, isParsing ? "\u23F3" : (preview.valid?"\u2705":"\u274C")),
+        isParsing && h("span",null,"Parsing with Gemini..."),
+        !isParsing && preview.type==="multiple" && h("span",null,"Multiple events detected: " + preview.entries.length + " entries."),
+        !isParsing && preview.type==="period" && h("span",null,"Period start detected \u2192 "+fmtDate(preview.date)),
+        !isParsing && preview.type==="mood" && h("span",null, "Mood: \""+(preview.word || preview.summary)+"\" ("+(preview.score>0?"+":"")+preview.score+") \u2192 "+fmtDate(preview.date)),
+        !isParsing && preview.type==="unknown" && h("span",null,"Could not parse. Try a mood word or \"period started\".")
       )
     ),
 
