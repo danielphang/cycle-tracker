@@ -401,31 +401,29 @@ function App() {
 
   useEffect(function(){ refresh(); }, []);
 
-  useEffect(function() {
-    if (!inp || inp.trim().length < 3) {
-      setLlmResult(null);
+  function fetchParse(text) {
+    if (!text || text.trim().length < 3) return Promise.resolve(null);
+    setIsParsing(true);
+    return fetch("/api/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
       setIsParsing(false);
-      return;
-    }
-    var timer = setTimeout(function() {
-      setIsParsing(true);
-      fetch("/api/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: inp })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (d.parsed) setLlmResult(d.parsed);
-        setIsParsing(false);
-      })
-      .catch(function(err) {
-        console.error("parse err", err);
-        setIsParsing(false);
-      });
-    }, 500);
-    return function() { clearTimeout(timer); };
-  }, [inp]);
+      if (d.parsed && d.parsed.understood && d.parsed.entries && d.parsed.entries.length > 0) {
+        setLlmResult(d.parsed);
+        return d.parsed;
+      }
+      return null;
+    })
+    .catch(function(err) {
+      console.error("parse err", err);
+      setIsParsing(false);
+      return null;
+    });
+  }
 
   var localPreview = useMemo(function(){ return parseInput(inp); }, [inp]);
   var preview = useMemo(function() {
@@ -475,14 +473,15 @@ function App() {
   }, [data, chartMap]);
 
   /* ── Handlers ─────────────────────────────────────────────── */
-  function handleLog() {
-    if (!preview.valid) return;
+  function doLog(resolvedPreview) {
+    var p = resolvedPreview || preview;
+    if (!p.valid) return;
 
     var entries = [];
-    if (preview.type === "multiple") {
-      entries = preview.entries;
+    if (p.type === "multiple") {
+      entries = p.entries;
     } else {
-      entries = [preview];
+      entries = [p];
     }
 
     entries.forEach(function(entry) {
@@ -501,6 +500,41 @@ function App() {
 
     setInp("");
     setLlmResult(null);
+  }
+
+  function handleLog() {
+    if (isParsing) return;
+    var text = inp.trim();
+    if (!text) return;
+
+    // If we already have an LLM result, use it directly
+    if (llmResult && llmResult.understood && llmResult.entries && llmResult.entries.length > 0) {
+      doLog(preview);
+      return;
+    }
+
+    // Otherwise, fire LLM parse then log
+    fetchParse(text).then(function(parsed) {
+      if (parsed && parsed.entries && parsed.entries.length > 0) {
+        // Build preview from LLM result and log
+        var llmPreview;
+        if (parsed.entries.length === 1) {
+          var e = parsed.entries[0];
+          llmPreview = { valid: true, type: e.type, date: e.date, score: e.score, word: e.summary, summary: e.summary, label: e.original_text || text };
+        } else {
+          llmPreview = { valid: true, type: "multiple", entries: parsed.entries };
+        }
+        doLog(llmPreview);
+      } else {
+        // Fall back to local parser
+        var local = parseInput(text);
+        if (local.valid) {
+          doLog(local);
+        } else {
+          toast("error", "Could not understand input. Try a mood word or \"period started\".");
+        }
+      }
+    });
   }
 
   function handleDeletePeriod(dateStr) {
@@ -600,22 +634,22 @@ function App() {
         h("input",{
           type:"text",value:inp,
           onChange:function(e){setInp(e.target.value);},
-          onKeyDown:function(e){if(e.key==="Enter"&&preview.valid)handleLog();},
+          onKeyDown:function(e){if(e.key==="Enter")handleLog();},
           placeholder:"e.g. \"yesterday she was really irritable\" or \"got my period today\"",
           style:{flex:1,padding:"12px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(0,0,0,0.25)",color:"#fff",fontSize:15}
         }),
         h("button",{
-          disabled:!preview.valid || isParsing, onClick:handleLog,
-          style:{padding:"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:(preview.valid && !isParsing)?1:0.4,cursor:(preview.valid && !isParsing)?"pointer":"not-allowed",transition:"opacity .2s"}
+          disabled:isParsing || !inp.trim(), onClick:handleLog,
+          style:{padding:"12px 24px",borderRadius:10,border:"none",background:"#7b1fa2",color:"#fff",fontWeight:700,opacity:(!isParsing && inp.trim())?1:0.4,cursor:(!isParsing && inp.trim())?"pointer":"not-allowed",transition:"opacity .2s"}
         }, isParsing ? "..." : "Log")
       ),
-      inp && h("div",{style:{marginTop:10,fontSize:13,display:"flex",alignItems:"center",gap:8,color:preview.valid?"#4caf50":"#ef5350"}},
-        h("span",null, isParsing ? "\u23F3" : (preview.valid?"\u2705":"\u274C")),
+      inp && h("div",{style:{marginTop:10,fontSize:13,display:"flex",alignItems:"center",gap:8,color:preview.valid?"#4caf50":"#888"}},
+        h("span",null, isParsing ? "\u23F3" : (preview.valid?"\u2705":"\u{1F4AD}")),
         isParsing && h("span",null,"Parsing with Gemini..."),
         !isParsing && preview.type==="multiple" && h("span",null,"Multiple events detected: " + preview.entries.length + " entries."),
         !isParsing && preview.type==="period" && h("span",null,"Period start detected \u2192 "+fmtDate(preview.date)),
         !isParsing && preview.type==="mood" && h("span",null, "Mood: \""+(preview.word || preview.summary)+"\" ("+(preview.score>0?"+":"")+preview.score+") \u2192 "+fmtDate(preview.date)),
-        !isParsing && preview.type==="unknown" && h("span",null,"Could not parse. Try a mood word or \"period started\".")
+        !isParsing && !preview.valid && h("span",null,"Press Enter or click Log to parse with Gemini")
       )
     ),
 
