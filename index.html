@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cycle Intelligence</title>
+  <meta name="description" content="Predictive hormonal cycle tracking for relationship well-being">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:linear-gradient(160deg,#0d0d1a 0%,#1a1a2e 40%,#16213e 100%);background-attachment:fixed;color:#e0e0e0;min-height:100vh;-webkit-font-smoothing:antialiased}
+    h1,h2,h3,h4,.serif{font-family:'Playfair Display',serif}
+    .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;margin-bottom:16px;transition:border-color .2s}
+    .card:hover{border-color:rgba(255,255,255,0.12)}
+    button,input{font-family:'DM Sans',sans-serif}
+    input:focus{outline:none;border-color:rgba(123,31,162,0.6)!important}
+    @keyframes pulse{0%,100%{opacity:.5;transform:translateX(-50%) translateY(4px)}50%{opacity:1;transform:translateX(-50%) translateY(-2px)}}
+    .tri-pulse{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #fff;animation:pulse 1.6s ease-in-out infinite}
+    .toast-wrap{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+    .toast{padding:14px 20px;border-radius:10px;color:#fff;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slideIn .3s ease-out}
+    @keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+    .tab-btn{padding:10px 26px;border-radius:24px;border:none;font-weight:700;cursor:pointer;transition:all .25s;font-size:14px;letter-spacing:.3px}
+    .tab-btn.active{background:#7b1fa2;color:#fff;box-shadow:0 4px 12px rgba(123,31,162,.4)}
+    .tab-btn:not(.active){background:rgba(255,255,255,.05);color:#999}
+    .tab-btn:not(.active):hover{background:rgba(255,255,255,.1);color:#ccc}
+    .stat{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#aaa}
+    .stat strong{color:#e0e0e0}
+    @media(max-width:768px){
+      html{font-size:15px}
+      .card{padding:14px;border-radius:12px;margin-bottom:12px}
+      .tab-btn{padding:8px 16px;font-size:13px;flex:1;text-align:center}
+      .toast-wrap{top:8px;right:8px;left:8px}
+      .toast{padding:10px 14px;font-size:13px}
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- app.js uses React.createElement directly — no Babel/JSX needed -->
+  <script src="app.js"></script>
+  <script>
+    var root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
