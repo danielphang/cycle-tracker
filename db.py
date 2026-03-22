@@ -89,6 +89,19 @@ def delete_mood(date):
     conn.commit()
     conn.close()
 
+def delete_latest_mood_entry():
+    conn = get_conn()
+    cursor = conn.execute("SELECT date FROM mood_entries ORDER BY updated_at DESC LIMIT 1")
+    row = cursor.fetchone()
+    if row:
+        conn.execute("DELETE FROM mood_entries WHERE date = ?", (row['date'],))
+        conn.commit()
+        deleted_date = row['date']
+    else:
+        deleted_date = None
+    conn.close()
+    return deleted_date
+
 def get_moods(start_date=None, end_date=None):
     conn = get_conn()
     query = "SELECT * FROM mood_entries"

@@ -387,6 +387,10 @@ function App() {
   var _ts = useState([]);          var toasts  = _ts[0]; var setToasts = _ts[1];
   var _lp = useState(false);       var isParsing = _lp[0]; var setIsParsing = _lp[1];
   var _lr = useState(null);        var llmResult = _lr[0]; var setLlmResult = _lr[1];
+
+  var _ed = useState(null);        var editDate = _ed[0]; var setEditDate = _ed[1];
+  var _ein = useState("");         var editInp = _ein[0]; var setEditInp = _ein[1];
+  var _ep = useState(false);       var isEditParsing = _ep[0]; var setIsEditParsing = _ep[1];
   var idRef = useRef(0);
   var mobile = useIsMobile();
 
@@ -512,6 +516,18 @@ function App() {
     var text = inp.trim();
     if (!text) return;
 
+    if (/^(undo|undo\s+last\s+entry|undo\s+that)$/i.test(text)) {
+      fetch("/api/mood/undo", { method: "POST", headers:{"Content-Type":"application/json"} })
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.deleted_date) { setData(d.state); toast("info","Undid log for "+fmtDate(d.deleted_date)); }
+          else { toast("error","Nothing to undo"); }
+        })
+        .catch(function(err){toast("error","Undo failed");});
+      setInp("");
+      return;
+    }
+
     // If we already have an LLM result, use it directly
     if (llmResult && llmResult.understood && llmResult.entries && llmResult.entries.length > 0) {
       doLog(preview);
@@ -547,6 +563,36 @@ function App() {
       .then(function(r){return r.json();})
       .then(function(d){setData(d); toast("info","Removed period date");})
       .catch(function(err){toast("error","Delete failed");});
+  }
+
+  function handleDeleteMood(dateStr) {
+    if (!confirm("Delete mood entry for "+fmtDate(dateStr)+"?")) return;
+    fetch("/api/mood/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:dateStr}) })
+      .then(function(r){return r.json();})
+      .then(function(d){setData(d); toast("info","Removed mood entry");})
+      .catch(function(err){toast("error","Delete failed");});
+  }
+
+  function handleEditSave(dateStr) {
+    var text = editInp.trim();
+    if (!text) { setEditDate(null); return; }
+    setIsEditParsing(true);
+    fetch("/api/parse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }) })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        setIsEditParsing(false);
+        if (d.parsed && d.parsed.understood && d.parsed.entries && d.parsed.entries.length > 0) {
+          var entry = d.parsed.entries[0];
+          var score = entry.score;
+          var lbl = entry.original_text || text;
+          fetch("/api/mood", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({date:dateStr,score:score,label:lbl}) })
+            .then(function(){ refresh(); toast("success","Updated mood for "+fmtDate(dateStr)); setEditDate(null); })
+            .catch(function(err){ toast("error","Update failed"); });
+        } else {
+          toast("error", "Could not understand edit");
+        }
+      })
+      .catch(function(err) { setIsEditParsing(false); toast("error", "Parse failed"); });
   }
 
   // Loading
@@ -744,7 +790,8 @@ function App() {
       (data.moodEntries||[]).slice().sort(function(a,b){return b.date<a.date?-1:1;}).map(function(e,i){
         var pt = chartMap[e.date];
         var ft2 = pt && pt.fitScore!==null ? fitTier(pt.fitScore) : null;
-        return h("div",{key:i,className:"card",style:{margin:"0 0 12px",display:"flex",gap:mobile?10:14,alignItems:"flex-start"}},
+        var isEditing = editDate === e.date;
+        return h("div",{key:i,className:"card",style:{margin:"0 0 12px",display:"flex",gap:mobile?10:14,alignItems:isEditing?"center":"flex-start"}},
           h("div",{style:{fontSize:mobile?22:28,background:"rgba(0,0,0,0.3)",width:mobile?38:48,height:mobile?38:48,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}, emoji(e.score)),
           h("div",{style:{flex:1,minWidth:0}},
             h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
@@ -753,10 +800,25 @@ function App() {
               ),
               h("span",{style:{fontWeight:700,color:e.score>0?"#4caf50":"#ef5350"}}, e.score>0?"+"+e.score:e.score)
             ),
-            h("p",{style:{margin:"0 0 8px",fontSize:14,color:"#ccc",wordBreak:"break-word"}}, '"'+e.label+'"'),
-            ft2 && h("span",{style:{display:"inline-block",padding:"4px 10px",borderRadius:6,border:"1px solid "+ft2.color,fontSize:12,color:ft2.color,fontWeight:600}},
-              ft2.label+" ("+Math.round(pt.fitScore*100)+"%)"
-            )
+            isEditing ?
+              h("div",{style:{display:"flex",gap:8,marginTop:8}},
+                h("input",{type:"text",value:editInp,onChange:function(ev){setEditInp(ev.target.value);},onKeyDown:function(ev){if(ev.key==="Enter")handleEditSave(e.date);if(ev.key==="Escape")setEditDate(null);},autoFocus:true,style:{flex:1,padding:"8px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(0,0,0,0.3)",color:"#fff",fontSize:14}}),
+                h("button",{onClick:function(){handleEditSave(e.date);},disabled:isEditParsing,style:{padding:"8px 14px",background:"#4caf50",color:"#fff",border:"none",borderRadius:6,cursor:isEditParsing?"not-allowed":"pointer",fontWeight:600}}, isEditParsing?"...":"Save"),
+                h("button",{onClick:function(){setEditDate(null);},style:{padding:"8px 14px",background:"none",color:"#bbb",border:"none",cursor:"pointer"}},"Cancel")
+              )
+            :
+              h("div", null,
+                h("p",{style:{margin:"0 0 8px",fontSize:14,color:"#ccc",wordBreak:"break-word"}}, '"'+e.label+'"'),
+                h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                  ft2 ? h("span",{style:{display:"inline-block",padding:"4px 10px",borderRadius:6,border:"1px solid "+ft2.color,fontSize:12,color:ft2.color,fontWeight:600}},
+                    ft2.label+" ("+Math.round(pt.fitScore*100)+"%)"
+                  ) : h("span",null),
+                  h("div",{style:{display:"flex",gap:8}},
+                    h("button",{onClick:function(){setEditDate(e.date);setEditInp(e.label);},style:{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:15,padding:0},title:"Edit entry"},"\u270E"),
+                    h("button",{onClick:function(){handleDeleteMood(e.date);},style:{background:"none",border:"none",color:"#ef5350",cursor:"pointer",fontSize:15,padding:0},title:"Delete entry"},"\uD83D\uDDD1")
+                  )
+                )
+              )
           )
         );
       }),

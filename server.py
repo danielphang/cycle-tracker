@@ -107,6 +107,10 @@ For period entries, detect phrases like "period started", "got her period", "day
             text_response = res_data['candidates'][0]['content']['parts'][0]['text']
             return json.loads(text_response), 200
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if hasattr(e, 'read'):
+            print(e.read().decode('utf-8'))
         return {"error": str(e)}, 500
 
 
@@ -144,6 +148,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 body = self._read_body()
                 db.delete_period(body["date"])
                 self._json_response(200, db.build_state())
+            elif self.path == "/api/mood/delete":
+                body = self._read_body()
+                db.delete_mood(body["date"])
+                self._json_response(200, db.build_state())
+            elif self.path == "/api/mood/undo":
+                deleted_date = db.delete_latest_mood_entry()
+                self._json_response(200, {"ok": True, "deleted_date": deleted_date, "state": db.build_state()})
             elif self.path == "/api/parse":
                 body = self._read_body()
                 text = body.get("text", "")
@@ -188,4 +199,5 @@ if __name__ == "__main__":
             print(f"Server started on port {PORT}")
             httpd.serve_forever()
     except Exception as e:
+        print(f"Error starting server: {e}")
         sys.exit(1)

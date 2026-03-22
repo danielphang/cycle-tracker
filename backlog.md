@@ -55,13 +55,13 @@
 ## 4 — Edit Log Entries (Natural Language)
 > Low-friction editing via natural language and inline UI.
 
-- [ ] Add `/api/entry/update` endpoint
-- [ ] Add `/api/entry/delete` endpoint
-- [ ] LLM-powered edit parsing: "update the entry on March 5 to say she was calm"
-- [ ] UI: pullable list of entries with inline one-liner editing
-- [ ] One-liner → structured format conversion (LLM assist)
-- [ ] Structured format → dashboard recomputation
-- [ ] Support "undo last entry" via simple command
+- [x] Add `/api/entry/update` endpoint
+- [x] Add `/api/entry/delete` endpoint
+- [x] LLM-powered edit parsing: "update the entry on March 5 to say she was calm"
+- [x] UI: pullable list of entries with inline one-liner editing
+- [x] One-liner → structured format conversion (LLM assist)
+- [x] Structured format → dashboard recomputation
+- [x] Support "undo last entry" via simple command
 
 ---
 
