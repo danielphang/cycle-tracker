@@ -91,4 +91,20 @@ node --test tests/test_logic.js
 ## 🧪 Verification & Stability
 The project includes automated verification steps and a robust logging system. Any changes to the model or database are verified against the existing test suite.
 
-![Full Regression Test](/Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/enter_trigger_test_1773984207188.webp)
+![Full Regression Test](file:///Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/enter_trigger_test_1773984207188.webp)
+
+---
+
+## 🔒 Security Audit & Hardening
+
+We performed a security audit to ensure no sensitive data is exposed in the public repository.
+
+### Actions Taken
+- **Hardened `.gitignore`**: Added `data/`, `__pycache__/`, `.DS_Store`, and `*.pyc`.
+- **Removed Tracked Data**: Purged `data/cycle.db` and markdown logs from the git index.
+- **Verified History**: Confirmed that previously committed `.env` files only contained placeholders.
+
+### Verified Clean State
+The repository now only contains code and safely placeholders.
+
+![Clean Repository State](file:///Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/github_repo_file_list_1774673527314.png)
