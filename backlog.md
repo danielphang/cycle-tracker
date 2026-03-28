@@ -68,18 +68,29 @@
 ## 5 — Prediction Feedback & Delta Tracking
 > Allow logging retroactive feedback to compare predictions vs reality.
 
-- [ ] Extend data model: add `predicted_score` field to mood entries
-- [ ] When logging a mood on a future-predicted date, auto-capture the prediction
-- [ ] Add `delta` (actual - predicted) to the stored entry
-- [ ] Dashboard visualization: show prediction vs actual overlay on chart
-- [ ] Aggregate delta stats in Model Confidence card
-- [ ] Retroactive apply: "apply feedback" re-scores without altering predictions
-- [ ] Do NOT alter the prediction line when actuals are logged
-- [ ] Track cycle length changes over time (store historical values, show trend)
+- [x] Extend data model: add `predicted_score` field to mood entries
+- [x] When logging a mood on a future-predicted date, auto-capture the prediction
+- [x] Add `delta` (actual - predicted) to the stored entry
+- [x] Dashboard visualization: show prediction vs actual overlay on chart
+- [x] Aggregate delta stats in Model Confidence card
+- [x] Retroactive apply: "apply feedback" re-scores without altering predictions
+- [x] Do NOT alter the prediction line when actuals are logged
+- [x] Track cycle length changes over time (store historical values, show trend)
 
 ---
 
-## 6 — CLI & Agent API
+## 6 — Unit Testing & Logic Extraction
+> Decouple core logic from UI and add lightweight test suites.
+
+- [x] Extract `logic.js` (hormone math, phase scoring, NLP parser) from `app.js`
+- [x] Enable Node.js compatibility in `logic.js` for unit testing
+- [x] Add Python `tests/test_db.py` for database/logic coverage
+- [x] Add Node.js `tests/test_logic.js` (using `node --test`)
+- [x] Integrate `logic.js` back into `index.html` and `app.js`
+
+---
+
+## 7 — CLI & Agent API
 > Queryable interface for chatbot tool-calls and other agents.
 
 - [ ] Create `cli.py` with argparse: `--help`, subcommands

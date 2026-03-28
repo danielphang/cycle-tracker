@@ -7,6 +7,7 @@ import signal
 import sys
 import re
 import urllib.request
+import argparse
 from datetime import datetime, timedelta
 import db
 
@@ -138,7 +139,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         try:
             if self.path == "/api/mood":
                 body = self._read_body()
-                db.upsert_mood(body["date"], body["score"], body["label"])
+                db.upsert_mood(
+                    body["date"], 
+                    body["score"], 
+                    body["label"], 
+                    predicted_score=body.get("predicted_score")
+                )
                 self._json_response(200, {"ok": True})
             elif self.path == "/api/period":
                 body = self._read_body()
@@ -163,6 +169,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "parsed": parsed,
                     "raw_text": text
                 })
+            elif self.path == "/api/backfill-predictions":
+                # Get the cycle state to determine cycle length and last period
+                state = db.build_state()
+                cLen = state.get("cycleLength", 27)
+                pLen = state.get("periodLength", 5)
+                lpd_str = state.get("lastPeriodStart")
+
+                unpredicted = db.get_unpredicted_moods()
+                updated_count = 0
+
+                if lpd_str:
+                    lpd = datetime.strptime(lpd_str, "%Y-%m-%d")
+                    for entry in unpredicted:
+                        d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                        daysSince = (d - lpd).days
+                        dic = ((daysSince % cLen) + cLen) % cLen
+                        if dic == 0 and daysSince > 0:
+                            dic = cLen
+
+                        t = dic / cLen
+                        # Basic Phase Prediction
+                        if dic <= pLen:
+                            predicted = -1.0
+                        elif t <= 0.45:
+                            predicted = 1.2
+                        elif t <= 0.55:
+                            predicted = 2.0
+                        else:
+                            predicted = -0.8
+                        
+                        db.update_predicted_score(entry["date"], entry["score"], predicted)
+                        updated_count += 1
+
+                self._json_response(200, {"ok": True, "updated": updated_count, "state": db.build_state()})
             else:
                 self._json_response(404, {"error": "not found"})
         except Exception as e:
@@ -190,13 +230,18 @@ def graceful_shutdown(signum, frame):
     sys.exit(0)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=PORT, help="Port to run the server on")
+    args = parser.parse_args()
+    _p = args.port
+
     db.init_db()
     signal.signal(signal.SIGINT, graceful_shutdown)
     signal.signal(signal.SIGTERM, graceful_shutdown)
     socketserver.TCPServer.allow_reuse_address = True
     try:
-        with socketserver.TCPServer(("", PORT), Handler) as httpd:
-            print(f"Server started on port {PORT}")
+        with socketserver.TCPServer(("", _p), Handler) as httpd:
+            print(f"Server started on port {_p}")
             httpd.serve_forever()
     except Exception as e:
         print(f"Error starting server: {e}")

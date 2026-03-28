@@ -44,8 +44,10 @@
 </head>
 <body>
   <div id="root"></div>
+  <!-- Core Cycle Logic (parsed by test suite and browser) -->
+  <script src="logic.js"></script>
   <!-- app.js uses React.createElement directly — no Babel/JSX needed -->
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
   <script>
     var root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(React.createElement(App));

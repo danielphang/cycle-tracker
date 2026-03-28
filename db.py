@@ -120,17 +120,45 @@ def get_moods(start_date=None, end_date=None):
     conn.close()
     return [dict(row) for row in rows]
 
+def update_cycle_history():
+    conn = get_conn()
+    periods = [row['date'] for row in conn.execute("SELECT date FROM period_entries ORDER BY date ASC").fetchall()]
+    cycle_length = 27
+    if len(periods) >= 2:
+        diffs = []
+        for i in range(1, len(periods)):
+            d1 = datetime.strptime(periods[i-1], "%Y-%m-%d")
+            d2 = datetime.strptime(periods[i], "%Y-%m-%d")
+            diff = (d2 - d1).days
+            if 21 <= diff <= 40: diffs.append(diff)
+        if diffs: cycle_length = round(sum(diffs) / len(diffs))
+    
+    row = conn.execute("SELECT value FROM cycle_config WHERE key = 'cycle_history'").fetchone()
+    history = json.loads(row['value']) if row else []
+    today = str(datetime.now().date())
+    
+    if not history or history[-1].get('length') != cycle_length:
+        if history and history[-1].get('date') == today:
+            history[-1]['length'] = cycle_length
+        else:
+            history.append({"date": today, "length": cycle_length})
+        conn.execute("INSERT OR REPLACE INTO cycle_config (key, value) VALUES ('cycle_history', ?)", (json.dumps(history),))
+        conn.commit()
+    conn.close()
+
 def upsert_period(date):
     conn = get_conn()
     conn.execute("INSERT OR IGNORE INTO period_entries (date) VALUES (?)", (date,))
     conn.commit()
     conn.close()
+    update_cycle_history()
 
 def delete_period(date):
     conn = get_conn()
     conn.execute("DELETE FROM period_entries WHERE date = ?", (date,))
     conn.commit()
     conn.close()
+    update_cycle_history()
 
 def get_periods():
     conn = get_conn()
@@ -157,15 +185,33 @@ def build_state():
             diff = (d2 - d1).days
             if 21 <= diff <= 40: diffs.append(diff)
         if diffs: cycle_length = round(sum(diffs) / len(diffs))
+    cycle_history_str = get_config('cycle_history', '[]')
+    try:
+        cycle_history = json.loads(cycle_history_str)
+    except:
+        cycle_history = []
+
     return {
         "lastPeriodStart": periods[-1] if periods else None,
         "cycleLength": cycle_length,
         "periodLength": period_length,
-        "moodEntries": [{"date": m["date"], "score": m["score"], "label": m["summary"]} for m in moods],
-        "periodDays": periods
+        "moodEntries": [{"date": m["date"], "score": m["score"], "label": m["summary"], "predicted_score": m["predicted_score"], "delta": m["delta"]} for m in moods],
+        "periodDays": periods,
+        "cycleHistory": cycle_history
     }
 
-def export_markdown():
+def get_unpredicted_moods():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM mood_entries WHERE predicted_score IS NULL").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def update_predicted_score(date, score, predicted_score):
+    conn = get_conn()
+    delta = score - predicted_score
+    conn.execute("UPDATE mood_entries SET predicted_score = ?, delta = ? WHERE date = ?", (predicted_score, delta, date))
+    conn.commit()
+    conn.close()
     moods = get_moods()
     periods = get_periods()
     with open(MOOD_LOG_PATH, 'w') as f:
