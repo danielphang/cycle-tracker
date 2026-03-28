@@ -40,7 +40,7 @@ Simply type how the day went in the input box at the bottom. The app uses **Gemi
 - **"Yesterday she was a bit sensitive"** → Logs a `-1` for yesterday.
 - **"Monday was a total meltdown"** → Logs a `-3` for last Monday.
 
-![Logging Preview](/Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/preview_before_enter_1773984269526.png)
+![Logging Preview](docs/images/preview.png)
 
 ### Tracking Period Dates
 To update the cycle model, just tell the app when the period started:
@@ -57,7 +57,7 @@ To update the cycle model, just tell the app when the period started:
 - **Undo**: Type "undo" to remove the most recent entry.
 - **Edit/Delete**: Switch to the **History** tab to edit entries inline or delete them.
 
-![History UI](/Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/feature_4_edit_delete_verification_1774163241749.webp)
+![History UI](docs/images/history_edit.webp)
 
 ---
 
@@ -91,20 +91,6 @@ node --test tests/test_logic.js
 ## 🧪 Verification & Stability
 The project includes automated verification steps and a robust logging system. Any changes to the model or database are verified against the existing test suite.
 
-![Full Regression Test](file:///Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/enter_trigger_test_1773984207188.webp)
+![Full Regression Test](docs/images/full_test.webp)
 
----
 
-## 🔒 Security Audit & Hardening
-
-We performed a security audit to ensure no sensitive data is exposed in the public repository.
-
-### Actions Taken
-- **Hardened `.gitignore`**: Added `data/`, `__pycache__/`, `.DS_Store`, and `*.pyc`.
-- **Removed Tracked Data**: Purged `data/cycle.db` and markdown logs from the git index.
-- **Verified History**: Confirmed that previously committed `.env` files only contained placeholders.
-
-### Verified Clean State
-The repository now only contains code and safely placeholders.
-
-![Clean Repository State](file:///Users/dphang/.gemini/antigravity/brain/83bf9094-8323-450b-9be8-7bb47bdc654b/github_repo_file_list_1774673527314.png)
